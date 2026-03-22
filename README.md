@@ -2,9 +2,8 @@
 
 A single-file, no-build weather dashboard built with vanilla HTML, CSS, and JavaScript. No API key required.
 
+<img width="600" height="auto" alt="WeatherDashboard-Main" src="https://github.com/user-attachments/assets/34b1e721-a631-4f99-81fb-ef92b3a7b62a" />
 ## Features
-
-<img width="800" height="auto" alt="WeatherDashboard-Main" src="https://github.com/user-attachments/assets/34b1e721-a631-4f99-81fb-ef92b3a7b62a" />
 
 ### Current Conditions
 
