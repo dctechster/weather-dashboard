@@ -4,7 +4,10 @@ A single-file, no-build weather dashboard built with vanilla HTML, CSS, and Java
 
 ## Features
 
+<img width="800" height="auto" alt="WeatherDashboard-Main" src="https://github.com/user-attachments/assets/34b1e721-a631-4f99-81fb-ef92b3a7b62a" />
+
 ### Current Conditions
+
 - Temperature (°F / °C toggle), description, and feels-like
 - Dynamic background that changes with weather conditions and time of day
 - Configurable info row: Sunrise, Sunset, Cloud cover, Wind speed, Wind direction (with rotated compass arrow), Gusts, Humidity, Pressure, Visibility, UV Index, Precipitation, Air Quality
