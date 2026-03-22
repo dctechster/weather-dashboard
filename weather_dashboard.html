@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Weather Dashboard</title>
+<link rel="icon" type="image/svg+xml" href="weather-icon.svg">
+<link rel="apple-touch-icon" href="weather-icon.svg">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --glass: rgba(255,255,255,0.12);
+    --glass-border: rgba(255,255,255,0.2);
+    --glass-hover: rgba(255,255,255,0.18);
+    --text: #fff;
+    --text-dim: rgba(255,255,255,0.65);
+    --radius: 16px;
+    --radius-sm: 10px;
+    --shadow: 0 8px 32px rgba(0,0,0,0.25);
+    --transition: 0.25s ease;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    color: var(--text);
+    min-height: 100vh;
+    background: linear-gradient(135deg, #1a73e8, #0d47a1);
+    transition: background 1.2s ease;
+  }
+
+  /* ── Backgrounds per condition ── */
+  body.bg-clear-day   { background: linear-gradient(160deg, #1565c0 0%, #e65100 100%); }
+  body.bg-clear-night { background: linear-gradient(160deg, #0d1b2a 0%, #1b2838 50%, #2a1b3d 100%); }
+  body.bg-cloudy      { background: linear-gradient(160deg, #37474f 0%, #546e7a 100%); }
+  body.bg-rain        { background: linear-gradient(160deg, #1a237e 0%, #37474f 100%); }
+  body.bg-snow        { background: linear-gradient(160deg, #b3e5fc 0%, #546e7a 100%); color: #1a1a2e; }
+  body.bg-snow        { --text: #1a1a2e; --text-dim: rgba(0,0,0,0.6); --glass: rgba(255,255,255,0.45); --glass-border: rgba(255,255,255,0.6); }
+  body.bg-storm       { background: linear-gradient(160deg, #0d0d1a 0%, #1a0533 100%); }
+  body.bg-fog         { background: linear-gradient(160deg, #78909c 0%, #b0bec5 100%); }
+
+  /* ── Layout ── */
+  .app { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+
+  /* ── Header ── */
+  .header {
+    display: flex; align-items: center; gap: 16px;
+    margin-bottom: 28px; flex-wrap: wrap;
+  }
+  .header h1 {
+    font-size: 1.4rem; font-weight: 700; letter-spacing: -0.3px;
+    white-space: nowrap;
+  }
+  .header h1 span { opacity: 0.7; }
+
+  .search-wrap {
+    flex: 1; position: relative; min-width: 220px;
+  }
+  .search-wrap input {
+    width: 100%; padding: 10px 44px 10px 16px;
+    background: var(--glass); border: 1px solid var(--glass-border);
+    border-radius: 50px; color: var(--text); font-size: 0.95rem;
+    outline: none; backdrop-filter: blur(12px);
+    transition: background var(--transition), border var(--transition);
+  }
+  .search-wrap input::placeholder { color: var(--text-dim); }
+  .search-wrap input:focus { background: var(--glass-hover); border-color: rgba(255,255,255,0.45); }
+  .search-btn {
+    position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; color: var(--text); cursor: pointer;
+    font-size: 1.1rem; line-height: 1; padding: 2px;
+  }
+  .autocomplete {
+    position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 100;
+    background: rgba(20,30,60,0.95); backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border); border-radius: var(--radius-sm);
+    overflow: hidden; display: none;
+  }
+  .autocomplete.open { display: block; }
+  .autocomplete-item {
+    padding: 10px 16px; cursor: pointer; font-size: 0.9rem;
+    transition: background var(--transition);
+  }
+  .autocomplete-item:hover { background: var(--glass-hover); }
+  .autocomplete-item .sub { font-size: 0.78rem; color: var(--text-dim); margin-top: 2px; }
+
+  .unit-toggle {
+    display: flex; background: var(--glass); border: 1px solid var(--glass-border);
+    border-radius: 50px; overflow: hidden; backdrop-filter: blur(12px);
+  }
+  .unit-btn {
+    padding: 8px 14px; border: none; background: none; color: var(--text);
+    cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: background var(--transition);
+  }
+  .unit-btn.active { background: rgba(255,255,255,0.3); }
+
+  /* ── Glass card ── */
+  .card {
+    background: var(--glass); backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border); border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+
+  /* ── Hero current weather ── */
+  .hero { padding: 32px; margin-bottom: 16px; position: relative; overflow: hidden; }
+  .hero-grid { display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: start; }
+  .hero-location { font-size: 1.6rem; font-weight: 700; margin-bottom: 4px; }
+  .hero-time { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 20px; }
+  .hero-temp { font-size: 5.5rem; font-weight: 300; line-height: 1; letter-spacing: -4px; }
+  .hero-temp sup { font-size: 2rem; letter-spacing: 0; font-weight: 400; vertical-align: super; }
+  .hero-desc { font-size: 1.2rem; margin-top: 6px; opacity: 0.9; }
+  .hero-feels { font-size: 0.9rem; color: var(--text-dim); margin-top: 4px; }
+  .hero-icon { font-size: 7rem; line-height: 1; text-align: right; }
+  .hero-extras { display: flex; gap: 24px; margin-top: 20px; flex-wrap: wrap; }
+  .hero-extra { font-size: 0.82rem; color: var(--text-dim); }
+  .hero-extra strong { display: block; font-size: 0.95rem; color: var(--text); font-weight: 600; }
+
+  /* ── Details row ── */
+  .details-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 12px; margin-bottom: 16px;
+  }
+  .detail-card { padding: 16px; text-align: center; }
+  .detail-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-dim); margin-bottom: 8px; }
+  .detail-icon { font-size: 1.6rem; margin-bottom: 6px; }
+  .detail-value { font-size: 1.35rem; font-weight: 600; }
+  .detail-sub { font-size: 0.75rem; color: var(--text-dim); margin-top: 3px; }
+
+  /* AQI colors */
+  .aqi-good    { color: #69f0ae; }
+  .aqi-mod     { color: #ffeb3b; }
+  .aqi-sens    { color: #ff9800; }
+  .aqi-unhlthy { color: #f44336; }
+  .aqi-very    { color: #9c27b0; }
+  .aqi-haz     { color: #b71c1c; }
+
+  /* ── Section header ── */
+  .section-title {
+    font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1.2px;
+    color: var(--text-dim); padding: 0 4px; margin-bottom: 10px; margin-top: 20px;
+  }
+
+  /* ── Hourly ── */
+  .hourly-strip {
+    display: flex; gap: 8px; overflow-x: auto; padding: 20px;
+    scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.2) transparent;
+  }
+  .hourly-strip::-webkit-scrollbar { height: 4px; }
+  .hourly-strip::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+  .hour-item {
+    flex: 0 0 70px; text-align: center; padding: 12px 8px;
+    background: var(--glass); border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm); transition: background var(--transition);
+  }
+  .hour-item:hover { background: var(--glass-hover); }
+  .hour-item.now { border-color: rgba(255,255,255,0.5); background: var(--glass-hover); }
+  .hour-time { font-size: 0.72rem; color: var(--text-dim); margin-bottom: 8px; }
+  .hour-icon { font-size: 1.4rem; margin-bottom: 6px; }
+  .hour-temp { font-size: 0.95rem; font-weight: 600; }
+  .hour-precip { font-size: 0.68rem; color: #90caf9; margin-top: 4px; }
+
+  /* ── Daily ── */
+  .daily-list { display: flex; flex-direction: column; gap: 0; }
+  .day-row {
+    display: grid;
+    grid-template-columns: 100px 40px 1fr auto auto;
+    align-items: center; gap: 12px; padding: 14px 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    transition: background var(--transition);
+  }
+  .day-row:last-child { border-bottom: none; }
+  .day-row:hover { background: var(--glass-hover); }
+  .day-name { font-size: 0.9rem; font-weight: 500; }
+  .day-icon { font-size: 1.5rem; text-align: center; }
+  .day-bar-wrap { position: relative; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; }
+  .day-bar { position: absolute; height: 100%; border-radius: 3px;
+    background: linear-gradient(90deg, #42a5f5, #ff7043); }
+  .day-temps { font-size: 0.88rem; text-align: right; }
+  .day-max { font-weight: 700; }
+  .day-min { color: var(--text-dim); margin-left: 6px; }
+  .day-precip-pct { font-size: 0.78rem; color: #90caf9; min-width: 36px; text-align: right; }
+
+  /* ── Chart ── */
+  .chart-wrap { padding: 20px 20px 12px; }
+  .chart-svg { width: 100%; overflow: visible; }
+  .chart-line { fill: none; stroke: rgba(255,255,255,0.9); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+  .chart-area { fill: url(#chartGrad); }
+  .chart-dot { fill: #fff; }
+  .chart-label { fill: rgba(255,255,255,0.7); font-size: 11px; text-anchor: middle; font-family: inherit; }
+  .chart-temp-label { fill: #fff; font-size: 11px; text-anchor: middle; font-weight: 600; font-family: inherit; }
+  .chart-grid { stroke: rgba(255,255,255,0.08); stroke-width: 1; }
+
+  /* ── Footer ── */
+  .footer { text-align: center; font-size: 0.75rem; color: var(--text-dim); margin-top: 28px; }
+
+  /* ── Loading / Error ── */
+  .state-msg {
+    text-align: center; padding: 48px 24px;
+    font-size: 1rem; color: var(--text-dim);
+  }
+  .spinner {
+    display: inline-block; width: 28px; height: 28px;
+    border: 3px solid rgba(255,255,255,0.2);
+    border-top-color: #fff; border-radius: 50%;
+    animation: spin 0.7s linear infinite; margin-bottom: 12px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Saved cities pills ── */
+  .saved-cities { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+  .city-pill {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 12px 5px 14px;
+    background: var(--glass); border: 1px solid var(--glass-border);
+    border-radius: 50px; font-size: 0.82rem; cursor: pointer;
+    backdrop-filter: blur(12px); transition: background var(--transition);
+  }
+  .city-pill:hover { background: var(--glass-hover); }
+  .city-pill.active { background: rgba(255,255,255,0.3); border-color: rgba(255,255,255,0.5); }
+  .city-pill-del {
+    font-size: 0.7rem; opacity: 0.5; cursor: pointer; line-height: 1;
+    padding: 2px; border-radius: 50%; transition: opacity var(--transition);
+  }
+  .city-pill-del:hover { opacity: 1; }
+
+  /* ── Config button ── */
+  .config-btn {
+    padding: 8px 14px; border: 1px solid var(--glass-border);
+    background: var(--glass); border-radius: 50px; color: var(--text);
+    cursor: pointer; font-size: 0.9rem; font-weight: 500;
+    backdrop-filter: blur(12px); transition: background var(--transition);
+    white-space: nowrap;
+  }
+  .config-btn:hover { background: var(--glass-hover); }
+  .config-btn.active { background: rgba(255,255,255,0.3); border-color: rgba(255,255,255,0.5); }
+
+  /* ── Config panel ── */
+  .config-panel {
+    display: none; background: var(--glass); backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border); border-radius: var(--radius);
+    padding: 20px; margin-bottom: 20px; box-shadow: var(--shadow);
+  }
+  .config-panel.open { display: block; }
+  .config-group + .config-group { margin-top: 16px; }
+  .config-group-label {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.8px;
+    color: var(--text-dim); margin-bottom: 10px;
+  }
+  .config-toggles { display: flex; flex-wrap: wrap; gap: 8px; }
+  .config-toggle {
+    padding: 6px 14px;
+    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 50px; color: var(--text); cursor: pointer;
+    font-size: 0.82rem; transition: background var(--transition), border var(--transition);
+  }
+  .config-toggle:hover { background: var(--glass-hover); }
+  .config-toggle.on { background: rgba(255,255,255,0.25); border-color: rgba(255,255,255,0.45); }
+
+  /* ── Section header with inline controls ── */
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px; margin-top: 20px;
+  }
+  .section-header .section-title { margin: 0; }
+  .chart-mode-wrap {
+    display: flex; background: var(--glass); border: 1px solid var(--glass-border);
+    border-radius: 50px; overflow: hidden; backdrop-filter: blur(12px);
+  }
+  .chart-mode-btn {
+    padding: 5px 12px; border: none; background: none; color: var(--text);
+    cursor: pointer; font-size: 0.78rem; font-weight: 600;
+    transition: background var(--transition);
+  }
+  .chart-mode-btn.active { background: rgba(255,255,255,0.3); }
+
+  /* ── Location button ── */
+  .loc-btn {
+    padding: 8px 14px; border: 1px solid var(--glass-border);
+    background: var(--glass); border-radius: 50px; color: var(--text);
+    cursor: pointer; font-size: 0.9rem; font-weight: 500;
+    backdrop-filter: blur(12px); transition: background var(--transition);
+    white-space: nowrap;
+  }
+  .loc-btn:hover { background: var(--glass-hover); }
+  .loc-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  /* ── Sun arc ── */
+  .sun-arc-svg { width: 100%; display: block; overflow: visible; margin: 10px 0 2px; }
+
+  /* ── Activity tip ── */
+  .activity-tip {
+    font-size: 0.82rem; color: var(--text-dim);
+    border-top: 1px solid var(--glass-border);
+    margin-top: 16px; padding-top: 14px;
+  }
+
+  /* ── Chart header with multiple control rows ── */
+  .chart-header { flex-wrap: wrap; gap: 8px; }
+  .chart-header-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+  @media (max-width: 600px) {
+    .hero-temp { font-size: 4rem; letter-spacing: -2px; }
+    .hero-icon { font-size: 5rem; }
+    .hero-grid { grid-template-columns: 1fr; }
+    .hero-icon { text-align: left; }
+    .day-row { grid-template-columns: 80px 36px 1fr auto; }
+    .day-precip-pct { display: none; }
+  }
+</style>
+</head>
+<body class="bg-clear-day">
+<div class="app">
+
+  <!-- Header -->
+  <div class="header">
+    <h1>⛅ <span>Weather</span> Dashboard</h1>
+    <div class="search-wrap">
+      <input id="searchInput" type="text" placeholder="Search city…" autocomplete="off" spellcheck="false">
+      <button class="search-btn" onclick="doSearch()">🔍</button>
+      <div class="autocomplete" id="autocomplete"></div>
+    </div>
+    <div class="unit-toggle">
+      <button class="unit-btn active" id="btnF" onclick="setUnit('F')">°F</button>
+      <button class="unit-btn" id="btnC" onclick="setUnit('C')">°C</button>
+    </div>
+    <button class="loc-btn" id="locBtn" onclick="detectLocation()">📍 My Location</button>
+    <button class="config-btn" id="configBtn" onclick="toggleConfig()">Configure</button>
+  </div>
+
+  <!-- Config panel -->
+  <div class="config-panel" id="configPanel"></div>
+
+  <!-- Saved city pills -->
+  <div class="saved-cities" id="savedCities"></div>
+
+  <!-- Dynamic content -->
+  <div id="content">
+    <div class="card"><div class="state-msg"><div class="spinner"></div><br>Loading weather…</div></div>
+  </div>
+
+  <div class="footer">
+    Data from <a href="https://open-meteo.com" target="_blank" style="color:inherit;opacity:0.8">Open-Meteo</a>
+    &nbsp;·&nbsp; Updates every 10 minutes
+  </div>
+</div>
+
+<script>
+// ── WMO Weather codes ──────────────────────────────────────────────────
+const WMO = {
+  0:  { label:'Clear Sky',               icon:'☀️',  group:'clear'  },
+  1:  { label:'Mainly Clear',            icon:'🌤️', group:'clear'  },
+  2:  { label:'Partly Cloudy',           icon:'⛅',  group:'cloudy' },
+  3:  { label:'Overcast',                icon:'☁️',  group:'cloudy' },
+  45: { label:'Foggy',                   icon:'🌫️', group:'fog'   },
+  48: { label:'Icy Fog',                 icon:'🌫️', group:'fog'   },
+  51: { label:'Light Drizzle',           icon:'🌦️', group:'rain'  },
+  53: { label:'Drizzle',                 icon:'🌧️', group:'rain'  },
+  55: { label:'Heavy Drizzle',           icon:'🌧️', group:'rain'  },
+  61: { label:'Light Rain',              icon:'🌧️', group:'rain'  },
+  63: { label:'Rain',                    icon:'🌧️', group:'rain'  },
+  65: { label:'Heavy Rain',              icon:'🌧️', group:'rain'  },
+  71: { label:'Light Snow',              icon:'🌨️', group:'snow'  },
+  73: { label:'Snow',                    icon:'❄️',  group:'snow'  },
+  75: { label:'Heavy Snow',              icon:'❄️',  group:'snow'  },
+  77: { label:'Snow Grains',             icon:'🌨️', group:'snow'  },
+  80: { label:'Light Showers',           icon:'🌦️', group:'rain'  },
+  81: { label:'Showers',                 icon:'🌧️', group:'rain'  },
+  82: { label:'Heavy Showers',           icon:'⛈️', group:'storm' },
+  85: { label:'Snow Showers',            icon:'🌨️', group:'snow'  },
+  86: { label:'Heavy Snow Showers',      icon:'❄️',  group:'snow'  },
+  95: { label:'Thunderstorm',            icon:'⛈️', group:'storm' },
+  96: { label:'Thunderstorm w/ Hail',    icon:'⛈️', group:'storm' },
+  99: { label:'Thunderstorm w/ Hail',    icon:'⛈️', group:'storm' },
+};
+function wmo(code) { return WMO[code] || { label:'Unknown', icon:'🌡️', group:'cloudy' }; }
+
+// ── HTML escape ─────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ── State ──────────────────────────────────────────────────────────────
+let unit = localStorage.getItem('wdUnit') || 'F';
+let savedCities = JSON.parse(localStorage.getItem('wdCities') || '[]');
+// [{name, lat, lon, country, tz}]
+let activeCity = null;
+let weatherCache = {}; // key: "lat,lon" → {data, aqiData, ts}
+const CACHE_MS = 10 * 60 * 1000;
+const CONFIG_DEFAULTS = {
+  showHumidity: true, showWind: true, showPressure: true,
+  showVisibility: true, showUV: true, showPrecip: true, showAQI: true,
+  showHourly: true, showDaily: true, showChart: true,
+  showHeroSunrise: true, showHeroSunset: true, showHeroCloud: true,
+  showHeroGusts: true, showHeroWindDir: false,
+  showHeroHumidity: false, showHeroWind: false, showHeroPressure: false,
+  showHeroVisibility: false, showHeroUV: false, showHeroPrecip: false,
+  showHeroAQI: false,
+};
+let config = { ...CONFIG_DEFAULTS, ...JSON.parse(localStorage.getItem('wdConfig') || '{}') };
+let configOpen = false;
+let chartMode = 'forecast'; // 'forecast' | 'past'
+let forecastDays = parseInt(localStorage.getItem('wdForecastDays') || '7');
+let chartMetric = localStorage.getItem('wdChartMetric') || 'temperature';
+
+// ── Converters ─────────────────────────────────────────────────────────
+function toDisplay(f) { return unit === 'F' ? Math.round(f) : Math.round((f - 32) * 5/9); }
+function unitSymbol()  { return unit === 'F' ? '°F' : '°C'; }
+function windDir(deg) {
+  const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  return dirs[Math.round(deg / 22.5) % 16];
+}
+function formatHour(isoStr, tz) {
+  const d = new Date(isoStr);
+  return d.toLocaleTimeString('en-US', { hour:'numeric', hour12:true, timeZone: tz }).replace(' ','');
+}
+function formatDay(isoStr, tz, short=true) {
+  const d = new Date(isoStr + 'T12:00:00');
+  return d.toLocaleDateString('en-US', { weekday: short ? 'short':'long', timeZone: tz });
+}
+function nowInTz(tz) {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: tz }));
+}
+
+// ── Background class ───────────────────────────────────────────────────
+function setBg(group, sunrise, sunset, tz) {
+  const now = nowInTz(tz);
+  const sr  = sunrise ? new Date(sunrise) : null;
+  const ss  = sunset  ? new Date(sunset)  : null;
+  const isDay = sr && ss ? (now >= sr && now <= ss) : true;
+
+  const map = {
+    clear:  isDay ? 'bg-clear-day' : 'bg-clear-night',
+    cloudy: 'bg-cloudy',
+    rain:   'bg-rain',
+    snow:   'bg-snow',
+    storm:  'bg-storm',
+    fog:    'bg-fog',
+  };
+  const cls = map[group] || 'bg-cloudy';
+  document.body.className = cls;
+}
+
+// ── AQI helpers ────────────────────────────────────────────────────────
+function aqiLabel(v) {
+  if (v <= 50)  return { text:'Good',        cls:'aqi-good'    };
+  if (v <= 100) return { text:'Moderate',    cls:'aqi-mod'     };
+  if (v <= 150) return { text:'Sens. Groups',cls:'aqi-sens'    };
+  if (v <= 200) return { text:'Unhealthy',   cls:'aqi-unhlthy' };
+  if (v <= 300) return { text:'Very Unhealthy',cls:'aqi-very'  };
+  return             { text:'Hazardous',     cls:'aqi-haz'     };
+}
+function uvLabel(v) {
+  if (v <= 2)  return 'Low';
+  if (v <= 5)  return 'Moderate';
+  if (v <= 7)  return 'High';
+  if (v <= 10) return 'Very High';
+  return 'Extreme';
+}
+
+// ── API ────────────────────────────────────────────────────────────────
+async function geocode(q) {
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=6&language=en&format=json`;
+  const r = await fetch(url);
+  const j = await r.json();
+  return j.results || [];
+}
+
+async function fetchWeather(lat, lon, tz) {
+  const key = `${lat},${lon}`;
+  const cached = weatherCache[key];
+  if (cached && Date.now() - cached.ts < CACHE_MS) return cached;
+
+  const vars = [
+    'temperature_2m','relative_humidity_2m','apparent_temperature',
+    'precipitation','weather_code','cloud_cover','pressure_msl',
+    'wind_speed_10m','wind_direction_10m','wind_gusts_10m','uv_index','visibility'
+  ].join(',');
+
+  const hVars = 'temperature_2m,precipitation_probability,weather_code,wind_speed_10m,relative_humidity_2m';
+  const dVars = 'weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,sunrise,sunset,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,uv_index_max';
+
+  const wxUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+    `&current=${vars}&hourly=${hVars}&daily=${dVars}` +
+    `&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch` +
+    `&timezone=${encodeURIComponent(tz)}&past_days=1&forecast_days=14`;
+
+  const aqUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}` +
+    `&current=us_aqi,pm2_5,pm10&timezone=${encodeURIComponent(tz)}`;
+
+  const [wxRes, aqRes] = await Promise.all([fetch(wxUrl), fetch(aqUrl).catch(()=>null)]);
+  const data    = await wxRes.json();
+  const aqiData = aqRes ? await aqRes.json().catch(()=>null) : null;
+
+  const entry = { data, aqiData, ts: Date.now() };
+  weatherCache[key] = entry;
+  return entry;
+}
+
+// ── SVG Chart ──────────────────────────────────────────────────────────
+function buildChart(hours, values, tz, mode = 'forecast', labelFn = v => `${toDisplay(v)}°`) {
+  const W = 1000, H = 120, pad = 36;
+  const now = nowInTz(tz);
+  const nowIdx = hours.findIndex(h => new Date(h) >= now);
+  let slice;
+  if (mode === 'past') {
+    const end   = nowIdx < 0 ? hours.length : nowIdx;
+    const start = Math.max(0, end - 24);
+    slice = { hours: hours.slice(start, end), values: values.slice(start, end) };
+  } else {
+    const start = nowIdx < 0 ? 0 : nowIdx;
+    slice = { hours: hours.slice(start, start + 24), values: values.slice(start, start + 24) };
+  }
+
+  if (slice.hours.length < 2) return '';
+
+  const mn = Math.min(...slice.values) - 3;
+  const mx = Math.max(...slice.values) + 3;
+  const n  = slice.hours.length;
+  const xOf = i => pad + (i / (n-1)) * (W - 2*pad);
+  const yOf = v => H - 20 - ((v - mn) / (mx - mn)) * (H - 40);
+
+  const pts = slice.values.map((v,i) => `${xOf(i)},${yOf(v)}`).join(' ');
+  const area = `M${xOf(0)},${yOf(slice.values[0])} ` +
+    slice.values.map((v,i) => `L${xOf(i)},${yOf(v)}`).join(' ') +
+    ` L${xOf(n-1)},${H} L${xOf(0)},${H} Z`;
+
+  // Pick ~6 label positions
+  const step = Math.max(1, Math.round(n/6));
+  const labels = slice.hours
+    .map((h,i) => ({ i, label: formatHour(h, tz), value: slice.values[i] }))
+    .filter((_,i) => i % step === 0 || i === n-1);
+
+  const gridLines = [0.25, 0.5, 0.75].map(f => {
+    const y = H - 20 - f * (H - 40);
+    return `<line class="chart-grid" x1="${pad}" y1="${y}" x2="${W-pad}" y2="${y}"/>`;
+  }).join('');
+
+  const dots = labels.map(l =>
+    `<circle class="chart-dot" cx="${xOf(l.i)}" cy="${yOf(l.value)}" r="3"/>`
+  ).join('');
+
+  const timeLabels = labels.map(l =>
+    `<text class="chart-label" x="${xOf(l.i)}" y="${H}">${l.label}</text>`
+  ).join('');
+
+  const valueLabels = labels.map(l =>
+    `<text class="chart-temp-label" x="${xOf(l.i)}" y="${yOf(l.value) - 9}">${labelFn(l.value)}</text>`
+  ).join('');
+
+  return `
+  <svg class="chart-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="rgba(255,255,255,0.25)"/>
+        <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+      </linearGradient>
+    </defs>
+    ${gridLines}
+    <path class="chart-area" d="${area}"/>
+    <polyline class="chart-line" points="${pts}"/>
+    ${dots}
+    ${valueLabels}
+    ${timeLabels}
+  </svg>`;
+}
+
+// ── Auto-detect location ───────────────────────────────────────────────
+async function detectLocation() {
+  const btn = document.getElementById('locBtn');
+  if (!navigator.geolocation) {
+    alert('Geolocation is not supported by your browser.');
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = '⏳ Locating…';
+
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    const { latitude: lat, longitude: lon } = pos.coords;
+    try {
+      const [geoRes, wxRes] = await Promise.all([
+        fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`),
+        fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m&timezone=auto`)
+      ]);
+      const geo = await geoRes.json();
+      const wx  = await wxRes.json();
+
+      const name    = geo.city || geo.locality || 'My Location';
+      const admin1  = geo.principalSubdivision || '';
+      const country = geo.countryCode || '';
+      const tz      = wx.timezone || 'UTC';
+
+      const city = { name, admin1, country, lat, lon, tz };
+      saveCity(city);
+      loadCity(city);
+    } catch(e) {
+      alert('Could not determine your location. Please try again.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '📍 My Location';
+    }
+  }, (err) => {
+    btn.disabled = false;
+    btn.textContent = '📍 My Location';
+    if (err.code !== 1) alert('Could not get your location. Please try again.');
+  });
+}
+
+// ── Config ─────────────────────────────────────────────────────────────
+function renderConfigPanel() {
+  const labels = {
+    showHumidity:      'Humidity',         showWind:          'Wind',
+    showPressure:      'Pressure',         showVisibility:    'Visibility',
+    showUV:            'UV Index',         showPrecip:        'Precipitation',
+    showAQI:           'Air Quality',
+    showHourly:        'Hourly Forecast',  showDaily:         '7-Day Forecast',
+    showChart:         'Temperature Chart',
+    showHeroSunrise:   'Sunrise',          showHeroSunset:    'Sunset',
+    showHeroCloud:     'Cloud Cover',      showHeroGusts:     'Gusts',
+    showHeroWindDir:   'Wind Direction',   showHeroHumidity:  'Humidity',
+    showHeroWind:      'Wind Speed',       showHeroPressure:  'Pressure',
+    showHeroVisibility:'Visibility',       showHeroUV:        'UV Index',
+    showHeroPrecip:    'Precipitation',    showHeroAQI:       'Air Quality',
+  };
+  const heroKeys    = [
+    'showHeroSunrise','showHeroSunset','showHeroCloud',
+    'showHeroWind','showHeroWindDir','showHeroGusts',
+    'showHeroHumidity','showHeroPressure','showHeroVisibility',
+    'showHeroUV','showHeroPrecip','showHeroAQI',
+  ];
+  const detailKeys  = ['showHumidity','showWind','showPressure','showVisibility','showUV','showPrecip','showAQI'];
+  const sectionKeys = ['showHourly','showDaily','showChart'];
+  const makeToggles = keys => keys.map(k =>
+    `<button class="config-toggle${config[k] ? ' on' : ''}" onclick="setConfig('${k}')">${labels[k]}</button>`
+  ).join('');
+  document.getElementById('configPanel').innerHTML = `
+    <div class="config-group">
+      <div class="config-group-label">Main Card</div>
+      <div class="config-toggles">${makeToggles(heroKeys)}</div>
+    </div>
+    <div class="config-group">
+      <div class="config-group-label">Detail Cards</div>
+      <div class="config-toggles">${makeToggles(detailKeys)}</div>
+    </div>
+    <div class="config-group">
+      <div class="config-group-label">Sections</div>
+      <div class="config-toggles">${makeToggles(sectionKeys)}</div>
+    </div>`;
+}
+function toggleConfig() {
+  configOpen = !configOpen;
+  document.getElementById('configPanel').classList.toggle('open', configOpen);
+  document.getElementById('configBtn').classList.toggle('active', configOpen);
+  if (configOpen) renderConfigPanel();
+}
+function setConfig(key) {
+  config[key] = !config[key];
+  localStorage.setItem('wdConfig', JSON.stringify(config));
+  renderConfigPanel();
+  if (activeCity) {
+    const entry = weatherCache[`${activeCity.lat},${activeCity.lon}`];
+    if (entry) render(entry, activeCity);
+    else loadCity(activeCity);
+  }
+}
+function setChartMode(mode) {
+  chartMode = mode;
+  if (activeCity) {
+    const entry = weatherCache[`${activeCity.lat},${activeCity.lon}`];
+    if (entry) render(entry, activeCity);
+  }
+}
+function setForecastDays(n) {
+  forecastDays = n;
+  localStorage.setItem('wdForecastDays', n);
+  if (activeCity) {
+    const entry = weatherCache[`${activeCity.lat},${activeCity.lon}`];
+    if (entry) render(entry, activeCity);
+  }
+}
+function setChartMetric(m) {
+  chartMetric = m;
+  localStorage.setItem('wdChartMetric', m);
+  if (activeCity) {
+    const entry = weatherCache[`${activeCity.lat},${activeCity.lon}`];
+    if (entry) render(entry, activeCity);
+  }
+}
+
+// ── Sunrise arc SVG ───────────────────────────────────────────────────
+function buildSunArc(sunriseIso, sunsetIso, tz) {
+  if (!sunriseIso || !sunsetIso) return '';
+  const now     = nowInTz(tz);
+  const sr      = new Date(sunriseIso);
+  const ss      = new Date(sunsetIso);
+  const total   = ss - sr;
+  const elapsed = now - sr;
+  let t = total > 0 ? elapsed / total : 0;
+  t = Math.max(0, Math.min(1, t));
+  const isDay = elapsed >= 0 && elapsed <= total;
+
+  const fmt = iso => new Date(iso).toLocaleTimeString('en-US', {
+    hour: 'numeric', minute: '2-digit', timeZone: tz
+  });
+
+  // Layout: wide viewBox, horizon at cy, arc peaks at cy-ry
+  const W = 400, H = 104;
+  const cx = 200, cy = 72, rx = 178, ry = 54;
+  const x1 = cx - rx;  // sunrise x
+  const x2 = cx + rx;  // sunset  x
+
+  // angle π→0 as t goes 0→1 (sunrise=left, noon=top, sunset=right)
+  const angle = Math.PI * (1 - t);
+  const sunX  = cx + rx * Math.cos(angle);
+  const sunY  = cy - ry * Math.sin(angle);
+
+  const hasProgress = t > 0.01;
+  const sunEl = isDay
+    ? `<circle cx="${sunX.toFixed(1)}" cy="${sunY.toFixed(1)}" r="18" fill="rgba(255,220,50,0.12)"/>
+       <circle cx="${sunX.toFixed(1)}" cy="${sunY.toFixed(1)}" r="11" fill="rgba(255,210,30,0.30)"/>
+       <circle cx="${sunX.toFixed(1)}" cy="${sunY.toFixed(1)}" r="6"  fill="#ffd700"/>`
+    : `<circle cx="${sunX.toFixed(1)}" cy="${sunY.toFixed(1)}" r="6"  fill="rgba(180,180,180,0.4)"/>`;
+
+  return `<svg class="sun-arc-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+    <line x1="${x1}" y1="${cy}" x2="${x2}" y2="${cy}" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
+    <path d="M ${x1},${cy} A ${rx},${ry} 0 0 0 ${x2},${cy}" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="2"/>
+    ${hasProgress ? `<path d="M ${x1},${cy} A ${rx},${ry} 0 0 0 ${sunX.toFixed(1)},${sunY.toFixed(1)}" fill="none" stroke="rgba(255,210,30,0.75)" stroke-width="3" stroke-linecap="round"/>` : ''}
+    <circle cx="${x1}" cy="${cy}" r="4" fill="rgba(255,165,50,0.9)"/>
+    <circle cx="${x2}" cy="${cy}" r="4" fill="rgba(255,100,50,0.9)"/>
+    ${sunEl}
+    <text x="${x1}" y="${cy + 15}" fill="rgba(255,255,255,0.5)"  font-size="10" text-anchor="middle" font-family="inherit">Sunrise</text>
+    <text x="${x1}" y="${cy + 28}" fill="rgba(255,255,255,0.85)" font-size="11" text-anchor="middle" font-family="inherit" font-weight="500">${esc(fmt(sunriseIso))}</text>
+    <text x="${x2}" y="${cy + 15}" fill="rgba(255,255,255,0.5)"  font-size="10" text-anchor="middle" font-family="inherit">Sunset</text>
+    <text x="${x2}" y="${cy + 28}" fill="rgba(255,255,255,0.85)" font-size="11" text-anchor="middle" font-family="inherit" font-weight="500">${esc(fmt(sunsetIso))}</text>
+  </svg>`;
+}
+
+// ── Activity recommendation ────────────────────────────────────────────
+function activityTip(c, h, hStart) {
+  const temp  = c.temperature_2m;   // °F (always)
+  const wind  = c.wind_speed_10m;   // mph
+  const uv    = c.uv_index ?? 0;
+  const code  = c.weather_code;
+  const group = wmo(code).group;
+
+  // Max precip probability over next 3 hours
+  const maxPrecip = Math.max(...(h.precipitation_probability.slice(hStart, hStart + 3)), 0);
+
+  let tip;
+  if (group === 'storm') {
+    tip = 'Stay indoors — thunderstorms are dangerous.';
+  } else if (maxPrecip >= 70) {
+    tip = 'Bring an umbrella — rain is likely soon.';
+  } else if (group === 'snow') {
+    tip = 'Bundle up and watch for icy conditions.';
+  } else if (group === 'fog') {
+    tip = 'Drive carefully — visibility is reduced.';
+  } else if (temp >= 95) {
+    tip = 'Heat advisory: stay hydrated and seek shade.';
+  } else if (temp <= 20) {
+    tip = 'Extremely cold — limit time outdoors.';
+  } else if (temp <= 32) {
+    tip = 'Freezing temperatures — dress in layers.';
+  } else if (maxPrecip >= 40) {
+    tip = 'Chance of rain — keep an umbrella handy.';
+  } else if (temp >= 80 && group === 'clear') {
+    tip = 'Great day for outdoor activities!';
+  } else if (group === 'clear') {
+    tip = 'Clear skies — enjoy the outdoors.';
+  } else if (group === 'rain') {
+    tip = 'Rain expected — plan indoor activities.';
+  } else if (group === 'cloudy') {
+    tip = 'Cloudy but dry — fine for outdoor activities.';
+  } else {
+    tip = 'Check conditions before heading out.';
+  }
+
+  const mods = [];
+  if (uv >= 6) mods.push('high UV — wear sunscreen');
+  if (wind >= 15) mods.push(`${unit === 'F' ? Math.round(wind) + ' mph' : Math.round(wind * 1.60934) + ' km/h'} winds`);
+  if (mods.length) tip += ' Note: ' + mods.join(', ') + '.';
+
+  return '💡 ' + tip;
+}
+
+// ── Render ─────────────────────────────────────────────────────────────
+function render({ data, aqiData }, city) {
+  const c  = data.current;
+  const h  = data.hourly;
+  const d  = data.daily;
+  const tz = data.timezone;
+
+  const cur = wmo(c.weather_code);
+  setBg(cur.group, d.sunrise?.[0], d.sunset?.[0], tz);
+
+  // Current time in city timezone
+  const localNow = nowInTz(tz);
+  const dateStr = localNow.toLocaleDateString('en-US', {
+    weekday:'long', month:'long', day:'numeric', year:'numeric', timeZone: tz
+  });
+  const timeStr = localNow.toLocaleTimeString('en-US', {
+    hour:'2-digit', minute:'2-digit', timeZone: tz
+  });
+
+  // Sunrise / sunset
+  const srStr = d.sunrise?.[0]
+    ? new Date(d.sunrise[0]).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:tz})
+    : '—';
+  const ssStr = d.sunset?.[0]
+    ? new Date(d.sunset[0]).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:tz})
+    : '—';
+
+  // Pressure trend (just display value)
+  const pressInHg = (c.pressure_msl / 33.864).toFixed(2);
+
+  // Visibility
+  const visMi = (c.visibility / 1609).toFixed(1);
+  const visDisplay = unit === 'F'
+    ? `${visMi}<small style="font-size:0.7em"> mi</small>`
+    : `${(c.visibility / 1000).toFixed(1)}<small style="font-size:0.7em"> km</small>`;
+
+  // Wind
+  const windDirStr = windDir(c.wind_direction_10m);
+
+  // AQI
+  const aqiVal  = aqiData?.current?.us_aqi ?? null;
+  const aqiInfo = aqiVal !== null ? aqiLabel(aqiVal) : null;
+
+  // Hourly — find current index
+  const nowHour = nowInTz(tz);
+  const hIdx    = h.time.findIndex(t => new Date(t) >= nowHour);
+  const hStart  = hIdx < 0 ? 0 : hIdx;
+
+  const hourlyHtml = h.time.slice(hStart, hStart + 24).map((t, i) => {
+    const idx   = hStart + i;
+    const temp  = h.temperature_2m[idx];
+    const prec  = h.precipitation_probability[idx] ?? 0;
+    const code  = h.weather_code[idx];
+    const info  = wmo(code);
+    const label = i === 0 ? 'Now' : formatHour(t, tz);
+    return `<div class="hour-item${i===0?' now':''}">
+      <div class="hour-time">${label}</div>
+      <div class="hour-icon">${info.icon}</div>
+      <div class="hour-temp">${toDisplay(temp)}°</div>
+      ${prec >= 10 ? `<div class="hour-precip">💧 ${prec}%</div>` : ''}
+    </div>`;
+  }).join('');
+
+  // Daily — slice to requested number of days
+  const daysToShow = Math.min(forecastDays, d.time.length);
+  const allMax = d.temperature_2m_max.slice(0, daysToShow);
+  const allMin = d.temperature_2m_min.slice(0, daysToShow);
+  const absMax = Math.max(...allMax);
+  const absMin = Math.min(...allMin);
+  const range  = absMax - absMin || 1;
+
+  const dailyHtml = d.time.slice(0, daysToShow).map((t, i) => {
+    const info  = wmo(d.weather_code[i]);
+    const mx    = d.temperature_2m_max[i];
+    const mn2   = d.temperature_2m_min[i];
+    const prec  = d.precipitation_probability_max[i] ?? 0;
+    const label = i === 0 ? 'Today' : formatDay(t, tz);
+    const barL  = ((mn2 - absMin) / range * 100).toFixed(1);
+    const barW  = ((mx - mn2)     / range * 100).toFixed(1);
+    return `<div class="day-row">
+      <div class="day-name">${label}</div>
+      <div class="day-icon">${info.icon}</div>
+      <div class="day-bar-wrap">
+        <div class="day-bar" style="left:${barL}%;width:${barW}%"></div>
+      </div>
+      <div class="day-precip-pct">${prec >= 10 ? `💧${prec}%` : ''}</div>
+      <div class="day-temps">
+        <span class="day-max">${toDisplay(mx)}°</span>
+        <span class="day-min">${toDisplay(mn2)}°</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Activity tip
+  const activityHtml = activityTip(c, h, hStart);
+
+  // Chart — metric config lookup
+  const chartConfigs = {
+    temperature: {
+      values: h.temperature_2m,
+      labelFn: v => `${toDisplay(v)}°`,
+      title: 'Temperature',
+    },
+    wind: {
+      values: h.wind_speed_10m,
+      labelFn: v => `${Math.round(unit === 'F' ? v : v * 1.60934)} ${unit === 'F' ? 'mph' : 'km/h'}`,
+      title: 'Wind Speed',
+    },
+    humidity: {
+      values: h.relative_humidity_2m,
+      labelFn: v => `${Math.round(v)}%`,
+      title: 'Humidity',
+    },
+    precip: {
+      values: h.precipitation_probability,
+      labelFn: v => `${Math.round(v)}%`,
+      title: 'Precip. Probability',
+    },
+  };
+  const cc = chartConfigs[chartMetric] || chartConfigs.temperature;
+  const chartHtml = buildChart(h.time, cc.values, tz, chartMode, cc.labelFn);
+
+  // Config-gated detail card fragments
+  const cardHumidity = !config.showHumidity ? '' : `<div class="card detail-card">
+      <div class="detail-label">Humidity</div>
+      <div class="detail-icon">💧</div>
+      <div class="detail-value">${c.relative_humidity_2m}%</div>
+      <div class="detail-sub">${c.relative_humidity_2m < 30 ? 'Dry' : c.relative_humidity_2m < 60 ? 'Comfortable' : 'Humid'}</div>
+    </div>`;
+  const cardWind = !config.showWind ? '' : `<div class="card detail-card">
+      <div class="detail-label">Wind</div>
+      <div class="detail-icon">🌬️</div>
+      <div class="detail-value">${Math.round(unit === 'F' ? c.wind_speed_10m : c.wind_speed_10m * 1.60934)}<small style="font-size:0.7em"> ${unit === 'F' ? 'mph' : 'km/h'}</small></div>
+      <div class="detail-sub">${windDirStr}</div>
+    </div>`;
+  const cardPressure = !config.showPressure ? '' : `<div class="card detail-card">
+      <div class="detail-label">Pressure</div>
+      <div class="detail-icon">🌡️</div>
+      <div class="detail-value">${Math.round(c.pressure_msl)}<small style="font-size:0.7em"> hPa</small></div>
+      <div class="detail-sub">${pressInHg} inHg</div>
+    </div>`;
+  const cardVisibility = !config.showVisibility ? '' : `<div class="card detail-card">
+      <div class="detail-label">Visibility</div>
+      <div class="detail-icon">👁️</div>
+      <div class="detail-value">${visDisplay}</div>
+      <div class="detail-sub">${parseFloat(visMi) >= 6 ? 'Clear' : parseFloat(visMi) >= 2 ? 'Moderate' : 'Poor'}</div>
+    </div>`;
+  const cardUV = !config.showUV ? '' : `<div class="card detail-card">
+      <div class="detail-label">UV Index</div>
+      <div class="detail-icon">☀️</div>
+      <div class="detail-value">${Math.round(c.uv_index ?? 0)}</div>
+      <div class="detail-sub">${uvLabel(c.uv_index ?? 0)}</div>
+    </div>`;
+  const cardPrecip = !config.showPrecip ? '' : `<div class="card detail-card">
+      <div class="detail-label">Precipitation</div>
+      <div class="detail-icon">🌧️</div>
+      <div class="detail-value">${unit === 'F' ? c.precipitation.toFixed(2) : (c.precipitation * 25.4).toFixed(1)}<small style="font-size:0.7em"> ${unit === 'F' ? 'in' : 'mm'}</small></div>
+      <div class="detail-sub">Last hour</div>
+    </div>`;
+  const aqiCardHtml = !(aqiInfo && config.showAQI) ? '' : `<div class="card detail-card">
+      <div class="detail-label">Air Quality</div>
+      <div class="detail-icon">😷</div>
+      <div class="detail-value ${aqiInfo.cls}">${aqiVal}</div>
+      <div class="detail-sub ${aqiInfo.cls}">${aqiInfo.text}</div>
+    </div>`;
+
+  // Config-gated section fragments
+  const sectionHourly = !config.showHourly ? '' : `
+    <!-- Hourly -->
+    <div class="section-title">Hourly Forecast</div>
+    <div class="card" style="padding:0">
+      <div class="hourly-strip">${hourlyHtml}</div>
+    </div>`;
+  const forecastToggle = `<div class="chart-mode-wrap">
+      <button class="chart-mode-btn${forecastDays === 7 ? ' active' : ''}" onclick="setForecastDays(7)">7 days</button>
+      <button class="chart-mode-btn${forecastDays === 14 ? ' active' : ''}" onclick="setForecastDays(14)">14 days</button>
+    </div>`;
+  const sectionDaily = !config.showDaily ? '' : `
+    <!-- Daily -->
+    <div class="section-header">
+      <div class="section-title">${forecastDays}-Day Forecast</div>
+      ${forecastToggle}
+    </div>
+    <div class="card daily-list">${dailyHtml}</div>`;
+  const chartModeToggle = `<div class="chart-mode-wrap">
+      <button class="chart-mode-btn${chartMode === 'forecast' ? ' active' : ''}" onclick="setChartMode('forecast')">Next 24h</button>
+      <button class="chart-mode-btn${chartMode === 'past' ? ' active' : ''}" onclick="setChartMode('past')">Past 24h</button>
+    </div>`;
+  const chartMetricToggle = `<div class="chart-mode-wrap">
+      <button class="chart-mode-btn${chartMetric === 'temperature' ? ' active' : ''}" onclick="setChartMetric('temperature')">Temp</button>
+      <button class="chart-mode-btn${chartMetric === 'wind' ? ' active' : ''}" onclick="setChartMetric('wind')">Wind</button>
+      <button class="chart-mode-btn${chartMetric === 'humidity' ? ' active' : ''}" onclick="setChartMetric('humidity')">Humidity</button>
+      <button class="chart-mode-btn${chartMetric === 'precip' ? ' active' : ''}" onclick="setChartMetric('precip')">Precip %</button>
+    </div>`;
+  const sectionChart = !config.showChart ? '' : `
+    <!-- Chart -->
+    <div class="section-header chart-header">
+      <div class="section-title">${cc.title} — ${chartMode === 'forecast' ? 'Next' : 'Past'} 24 Hours</div>
+      <div class="chart-header-controls">
+        ${chartMetricToggle}
+        ${chartModeToggle}
+      </div>
+    </div>
+    <div class="card chart-wrap">${chartHtml}</div>`;
+
+  document.getElementById('content').innerHTML = `
+    <!-- Hero -->
+    <div class="card hero">
+      <div class="hero-grid">
+        <div>
+          <div class="hero-location">${esc(city.name)}${city.admin1 ? ', '+esc(city.admin1) : ''}${city.country ? ', '+esc(city.country) : ''}</div>
+          <div class="hero-time">${dateStr} · ${timeStr}</div>
+          <div class="hero-temp">${toDisplay(c.temperature_2m)}<sup>${unitSymbol()}</sup></div>
+          <div class="hero-desc">${cur.label}</div>
+          <div class="hero-feels">Feels like ${toDisplay(c.apparent_temperature)}°</div>
+          <div class="hero-extras">
+            ${config.showHeroSunrise    ? `<div class="hero-extra"><strong>🌅 ${srStr}</strong>Sunrise</div>` : ''}
+            ${config.showHeroSunset     ? `<div class="hero-extra"><strong>🌇 ${ssStr}</strong>Sunset</div>` : ''}
+            ${config.showHeroCloud      ? `<div class="hero-extra"><strong>☁️ ${c.cloud_cover}%</strong>Cloud cover</div>` : ''}
+            ${config.showHeroWind       ? `<div class="hero-extra"><strong>🌬️ ${Math.round(unit === 'F' ? c.wind_speed_10m : c.wind_speed_10m * 1.60934)} ${unit === 'F' ? 'mph' : 'km/h'}</strong>Wind</div>` : ''}
+            ${config.showHeroWindDir    ? `<div class="hero-extra"><strong><span style="display:inline-block;transform:rotate(${c.wind_direction_10m}deg)">↑</span> ${windDirStr}</strong>Wind dir.</div>` : ''}
+            ${config.showHeroGusts      ? `<div class="hero-extra"><strong>💨 ${Math.round(unit === 'F' ? c.wind_gusts_10m : c.wind_gusts_10m * 1.60934)} ${unit === 'F' ? 'mph' : 'km/h'}</strong>Gusts</div>` : ''}
+            ${config.showHeroHumidity   ? `<div class="hero-extra"><strong>💧 ${c.relative_humidity_2m}%</strong>Humidity</div>` : ''}
+            ${config.showHeroPressure   ? `<div class="hero-extra"><strong>🌡️ ${Math.round(c.pressure_msl)} hPa</strong>Pressure</div>` : ''}
+            ${config.showHeroVisibility ? `<div class="hero-extra"><strong>👁️ ${visDisplay}</strong>Visibility</div>` : ''}
+            ${config.showHeroUV         ? `<div class="hero-extra"><strong>☀️ ${Math.round(c.uv_index ?? 0)}</strong>UV Index</div>` : ''}
+            ${config.showHeroPrecip     ? `<div class="hero-extra"><strong>🌧️ ${unit === 'F' ? c.precipitation.toFixed(2) : (c.precipitation * 25.4).toFixed(1)} ${unit === 'F' ? 'in' : 'mm'}</strong>Precip.</div>` : ''}
+            ${aqiInfo && config.showHeroAQI ? `<div class="hero-extra"><strong>😷 ${aqiVal}</strong>Air Quality</div>` : ''}
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div class="hero-icon">${cur.icon}</div>
+        </div>
+      </div>
+      <div class="activity-tip">${esc(activityHtml)}</div>
+    </div>
+
+    <!-- Detail cards -->
+    <div class="details-grid">
+      ${cardHumidity}
+      ${cardWind}
+      ${cardPressure}
+      ${cardVisibility}
+      ${cardUV}
+      ${cardPrecip}
+      ${aqiCardHtml}
+    </div>
+
+    ${sectionHourly}
+    ${sectionDaily}
+    ${sectionChart}
+  `;
+}
+
+// ── Load city ──────────────────────────────────────────────────────────
+async function loadCity(city) {
+  activeCity = city;
+  renderSavedPills();
+
+  document.getElementById('content').innerHTML =
+    `<div class="card"><div class="state-msg"><div class="spinner"></div><br>Fetching weather for <strong>${esc(city.name)}</strong>…</div></div>`;
+
+  try {
+    const entry = await fetchWeather(city.lat, city.lon, city.tz);
+    render(entry, city);
+    // Re-render chart on resize for responsiveness
+  } catch(e) {
+    document.getElementById('content').innerHTML =
+      `<div class="card"><div class="state-msg">⚠️ Could not load weather data.<br><small>${e.message}</small></div></div>`;
+  }
+}
+
+// ── Saved cities ───────────────────────────────────────────────────────
+function saveCity(city) {
+  if (!savedCities.find(c => c.lat === city.lat && c.lon === city.lon)) {
+    savedCities.push(city);
+    localStorage.setItem('wdCities', JSON.stringify(savedCities));
+  }
+}
+function removeCity(lat, lon) {
+  savedCities = savedCities.filter(c => !(c.lat === lat && c.lon === lon));
+  localStorage.setItem('wdCities', JSON.stringify(savedCities));
+  renderSavedPills();
+  if (activeCity?.lat === lat && activeCity?.lon === lon) {
+    if (savedCities.length) loadCity(savedCities[0]);
+  }
+}
+function renderSavedPills() {
+  const el = document.getElementById('savedCities');
+  el.innerHTML = savedCities.map((c, idx) => {
+    const active = activeCity?.lat === c.lat && activeCity?.lon === c.lon;
+    return `<div class="city-pill${active?' active':''}" data-idx="${idx}">
+      ${esc(c.name)}${c.admin1 ? ', '+esc(c.admin1) : ''}${c.country ? ', '+esc(c.country) : ''}
+      <span class="city-pill-del" data-del-idx="${idx}">✕</span>
+    </div>`;
+  }).join('');
+  el.querySelectorAll('.city-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      const c = savedCities[+pill.dataset.idx];
+      if (c) loadCity(c);
+    });
+  });
+  el.querySelectorAll('.city-pill-del').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const c = savedCities[+btn.dataset.delIdx];
+      if (c) removeCity(c.lat, c.lon);
+    });
+  });
+}
+
+// ── Search / autocomplete ──────────────────────────────────────────────
+let searchTimer = null;
+const searchInput = document.getElementById('searchInput');
+const acDiv       = document.getElementById('autocomplete');
+
+searchInput.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  const q = searchInput.value.trim();
+  if (q.length < 2) { acDiv.classList.remove('open'); return; }
+  searchTimer = setTimeout(() => runAutocomplete(q), 300);
+});
+searchInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') doSearch();
+  if (e.key === 'Escape') acDiv.classList.remove('open');
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('.search-wrap')) acDiv.classList.remove('open');
+});
+
+async function runAutocomplete(q) {
+  try {
+    const results = await geocode(q);
+    if (!results.length) { acDiv.classList.remove('open'); return; }
+    acDiv.innerHTML = results.map((r,i) =>
+      `<div class="autocomplete-item" data-idx="${i}">
+        <strong>${r.name}</strong>
+        <div class="sub">${[r.admin1, r.country].filter(Boolean).join(', ')}</div>
+      </div>`
+    ).join('');
+    acDiv._results = results;
+    acDiv.querySelectorAll('.autocomplete-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const r = acDiv._results[+el.dataset.idx];
+        pickResult(r);
+      });
+    });
+    acDiv.classList.add('open');
+  } catch {}
+}
+
+function pickResult(r) {
+  acDiv.classList.remove('open');
+  searchInput.value = '';
+  const city = {
+    name:    r.name,
+    admin1:  r.admin1 || '',
+    country: r.country_code || '',
+    lat:     r.latitude,
+    lon:     r.longitude,
+    tz:      r.timezone || 'UTC',
+  };
+  saveCity(city);
+  loadCity(city);
+}
+
+async function doSearch() {
+  const q = searchInput.value.trim();
+  if (!q) return;
+  const results = await geocode(q);
+  if (results.length) pickResult(results[0]);
+}
+
+// ── Unit toggle ────────────────────────────────────────────────────────
+function setUnit(u) {
+  unit = u;
+  localStorage.setItem('wdUnit', u);
+  document.getElementById('btnF').classList.toggle('active', u === 'F');
+  document.getElementById('btnC').classList.toggle('active', u === 'C');
+  if (activeCity) {
+    const key = `${activeCity.lat},${activeCity.lon}`;
+    const cached = weatherCache[key];
+    if (cached) render(cached, activeCity);
+    else loadCity(activeCity);
+  }
+}
+
+// ── Init ───────────────────────────────────────────────────────────────
+(function init() {
+  // Restore unit
+  document.getElementById('btnF').classList.toggle('active', unit === 'F');
+  document.getElementById('btnC').classList.toggle('active', unit === 'C');
+
+  // Default cities if none saved
+  if (!savedCities.length) {
+    savedCities = [
+      { name:'New York',    country:'US', lat: 40.7128, lon: -74.0060, tz:'America/New_York'  },
+      { name:'London',      country:'GB', lat: 51.5074, lon:  -0.1278, tz:'Europe/London'     },
+      { name:'Tokyo',       country:'JP', lat: 35.6762, lon: 139.6503, tz:'Asia/Tokyo'        },
+    ];
+    localStorage.setItem('wdCities', JSON.stringify(savedCities));
+  }
+
+  renderSavedPills();
+  loadCity(savedCities[0]);
+})();
+</script>
+</body>
+</html>
