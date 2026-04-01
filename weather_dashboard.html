@@ -418,10 +418,13 @@ function formatHour(isoStr, tz) {
   return d.toLocaleTimeString('en-US', { hour:'numeric', hour12:true, timeZone: tz }).replace(' ','');
 }
 function formatDay(isoStr, tz, short=true) {
+  // The API returns dates already in the city's local timezone (e.g. "2026-04-02").
+  // Parse components directly and read getDay() without any timezone conversion.
   const [year, month, day] = isoStr.split('-').map(Number);
-  const d = new (Date(Date.UTC(year, month - 1, day, 12));
- 
-  return d.toLocaleDateString('en-US', { weekday: short ? 'short':'long', timeZone: tz });
+  const d = new Date(year, month - 1, day);
+  const days  = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const daysL = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  return short ? days[d.getDay()] : daysL[d.getDay()];
 }
 function nowInTz(tz) {
   return new Date(new Date().toLocaleString('en-US', { timeZone: tz }));
@@ -851,19 +854,23 @@ function render({ data, aqiData }, city) {
     </div>`;
   }).join('');
 
-  // Daily — slice to requested number of days
-  const daysToShow = Math.min(forecastDays, d.time.length);
-  const allMax = d.temperature_2m_max.slice(0, daysToShow);
-  const allMin = d.temperature_2m_min.slice(0, daysToShow);
+  // Daily — find today's index (API uses past_days=1, so index 0 is yesterday)
+  const todayStr = localNow.toLocaleDateString('en-CA', { timeZone: tz }); // YYYY-MM-DD
+  const todayIdx = d.time.findIndex(t => t === todayStr);
+  const dStart   = todayIdx < 0 ? 0 : todayIdx;
+  const daysToShow = Math.min(forecastDays, d.time.length - dStart);
+  const allMax = d.temperature_2m_max.slice(dStart, dStart + daysToShow);
+  const allMin = d.temperature_2m_min.slice(dStart, dStart + daysToShow);
   const absMax = Math.max(...allMax);
   const absMin = Math.min(...allMin);
   const range  = absMax - absMin || 1;
 
-  const dailyHtml = d.time.slice(0, daysToShow).map((t, i) => {
-    const info  = wmo(d.weather_code[i]);
-    const mx    = d.temperature_2m_max[i];
-    const mn2   = d.temperature_2m_min[i];
-    const prec  = d.precipitation_probability_max[i] ?? 0;
+  const dailyHtml = d.time.slice(dStart, dStart + daysToShow).map((t, i) => {
+    const di    = dStart + i;
+    const info  = wmo(d.weather_code[di]);
+    const mx    = d.temperature_2m_max[di];
+    const mn2   = d.temperature_2m_min[di];
+    const prec  = d.precipitation_probability_max[di] ?? 0;
     const label = i === 0 ? 'Today' : formatDay(t, tz);
     const barL  = ((mn2 - absMin) / range * 100).toFixed(1);
     const barW  = ((mx - mn2)     / range * 100).toFixed(1);
