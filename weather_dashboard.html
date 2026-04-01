@@ -418,7 +418,7 @@ function formatHour(isoStr, tz) {
   return d.toLocaleTimeString('en-US', { hour:'numeric', hour12:true, timeZone: tz }).replace(' ','');
 }
 function formatDay(isoStr, tz, short=true) {
-  const d = new Date(isoStr + 'T00:00:000Z');
+  const d = new Date(isoStr + 'T00:00:00Z');
   return d.toLocaleDateString('en-US', { weekday: short ? 'short':'long', timeZone: tz });
 }
 function nowInTz(tz) {
